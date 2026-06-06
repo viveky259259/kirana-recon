@@ -1,17 +1,19 @@
-// Sarvam Vision — Document Intelligence (OCR) client.
+// Sarvam Vision — Document Intelligence client.
 // Docs: https://docs.sarvam.ai  ·  model: sarvam-vision
 //
-// The flow is an async job (verified live against the API):
+// This is Sarvam's only image-understanding API — confirmed against the official
+// sarvamai SDK, whose chat endpoint is text-only and whose sole image resource
+// is `document_intelligence`. The flow is an async job (verified live):
 //   1. POST  /doc-digitization/job/v1                      -> { job_id }
 //   2. POST  /doc-digitization/job/v1/upload-files         -> { upload_urls: { name: { file_url } } }
-//   3. PUT   <file_url>  (Azure blob, x-ms-blob-type: BlockBlob)  the PDF bytes
+//   3. PUT   <file_url>  (Azure blob, x-ms-blob-type: BlockBlob)  the file bytes
 //   4. POST  /doc-digitization/job/v1/{job_id}/start
 //   5. GET   /doc-digitization/job/v1/{job_id}/status       poll job_state
 //   6. POST  /doc-digitization/job/v1/{job_id}/download-files -> { download_urls: { "document.zip": { file_url } } }
 //      The ZIP contains document.md (the extracted text) + per-page metadata.
 //
-// Input must be a single PDF (or ZIP). Callers pass a PDF — see imageToPdf.ts
-// to wrap a phone photo into one.
+// The endpoint accepts a JPG/PNG/PDF/ZIP directly. We upload the photo as-is
+// (full resolution, no PDF round-trip) so Sarvam Vision sees the original pixels.
 
 import { inflateRawSync } from "node:zlib";
 
@@ -75,27 +77,37 @@ function unzip(buf: Buffer): Map<string, Buffer> {
 
 const TERMINAL = new Set(["Completed", "PartiallyCompleted", "Failed"]);
 
+const CONTENT_TYPES: Record<string, string> = {
+  jpg: "image/jpeg",
+  jpeg: "image/jpeg",
+  png: "image/png",
+  pdf: "application/pdf",
+  zip: "application/zip",
+};
+
 /**
- * OCR a PDF with Sarvam Vision and return the extracted markdown text.
- * @param pdf      PDF bytes (one PDF only).
+ * Extract text from a document/image with Sarvam Vision.
+ * @param bytes    File bytes (JPG/PNG/PDF/ZIP — uploaded as-is, no conversion).
+ * @param fileName Name with the correct extension (tells Sarvam the file type).
  * @param language Expected primary language, BCP-47 (default en-IN).
  */
-export async function extractTextFromPdf(pdf: Buffer, language = "en-IN"): Promise<string> {
-  // 1. create job. prompt_type=default_ocr keeps the output plain text (other
-  // modes wrap it in heavy HTML); md is the lightest output format.
+export async function extractText(bytes: Buffer, fileName: string, language = "en-IN"): Promise<string> {
+  const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
+  const contentType = CONTENT_TYPES[ext] ?? "application/octet-stream";
+
+  // 1. create job — plain Sarvam Vision model (no prompt_type), md output.
   const created = await (
     await sarvam("", {
       method: "POST",
       headers: { "Content-Type": "application/json" },
       body: JSON.stringify({
-        job_parameters: { language, output_format: "md", prompt_type: "default_ocr" },
+        job_parameters: { language, output_format: "md" },
       }),
     })
   ).json();
   const jobId: string = created.job_id;
 
   // 2. presigned upload URL
-  const fileName = "note.pdf";
   const up = await (
     await sarvam("/upload-files", {
       method: "POST",
@@ -106,11 +118,11 @@ export async function extractTextFromPdf(pdf: Buffer, language = "en-IN"): Promi
   const uploadUrl: string = up.upload_urls?.[fileName]?.file_url;
   if (!uploadUrl) throw new Error("Sarvam Vision: no upload URL returned");
 
-  // 3. PUT the PDF to Azure blob storage
+  // 3. PUT the file to Azure blob storage
   const put = await fetch(uploadUrl, {
     method: "PUT",
-    headers: { "x-ms-blob-type": "BlockBlob", "Content-Type": "application/pdf" },
-    body: pdf as unknown as BodyInit,
+    headers: { "x-ms-blob-type": "BlockBlob", "Content-Type": contentType },
+    body: bytes as unknown as BodyInit,
   });
   if (!put.ok) throw new Error(`Sarvam Vision: file upload failed (${put.status})`);
 

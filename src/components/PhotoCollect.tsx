@@ -5,27 +5,21 @@ import { FoundList } from "@/components/VoiceCollect";
 
 type Found = { payerName: string | null; amount: number };
 
-// Re-encode any picked image into a *baseline* JPEG, with EXIF orientation
-// baked in. This is essential: PDF's DCTDecode (used server-side to wrap the
-// photo for Sarvam) cannot embed progressive JPEGs, and phone cameras often
-// produce progressive + rotated files. Canvas always outputs baseline.
-//
-// maxDim is generous (2600) to preserve handwriting detail — OCR quality on
-// small/light strokes drops fast once you downscale a phone photo.
-async function toBaselineJpeg(file: File, maxDim = 2600): Promise<Blob> {
+// Normalize a picked image to a full-resolution JPEG with EXIF orientation
+// baked in (phone cameras store rotation as a flag Sarvam doesn't honor). We do
+// NOT downscale — Sarvam Vision sees the original pixels, since OCR quality on
+// small/light handwriting drops fast once a photo is shrunk.
+async function toUprightJpeg(file: File): Promise<Blob> {
   const bitmap = await createImageBitmap(file, { imageOrientation: "from-image" });
-  const scale = Math.min(1, maxDim / Math.max(bitmap.width, bitmap.height));
-  const w = Math.round(bitmap.width * scale);
-  const h = Math.round(bitmap.height * scale);
   const canvas = document.createElement("canvas");
-  canvas.width = w;
-  canvas.height = h;
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("Canvas unsupported");
-  ctx.drawImage(bitmap, 0, 0, w, h);
+  ctx.drawImage(bitmap, 0, 0);
   bitmap.close();
   return await new Promise<Blob>((resolve, reject) =>
-    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Encode failed"))), "image/jpeg", 0.9)
+    canvas.toBlob((b) => (b ? resolve(b) : reject(new Error("Encode failed"))), "image/jpeg", 0.95)
   );
 }
 
@@ -50,7 +44,7 @@ export function PhotoCollect({ onCaptured }: { onCaptured: () => void }) {
     setState("processing");
     try {
       const isPdf = file.type === "application/pdf";
-      const blob = isPdf ? file : await toBaselineJpeg(file);
+      const blob = isPdf ? file : await toUprightJpeg(file);
       if (!isPdf) setPreview(URL.createObjectURL(blob));
       const form = new FormData();
       form.append(isPdf ? "pdf" : "image", blob, isPdf ? "note.pdf" : "note.jpg");
