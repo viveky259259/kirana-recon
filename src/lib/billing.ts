@@ -26,12 +26,26 @@ export type BillingPayment = {
   invoiceId: string | null;
 };
 
+// An offline payment the merchant logs by voice or photo and then reviews.
+export type ReconEntry = {
+  id: string;
+  payerName: string | null;
+  amount: number;
+  source: "VOICE" | "OCR" | "MANUAL";
+  status: "PENDING" | "APPROVED" | "DECLINED";
+  rawText: string | null;
+  batchId: string | null;
+  createdAt: string;
+  decidedAt: string | null;
+};
+
 export type BillingStore = {
   storeName: string;
   upiVpa: string;
   ownerEmail: string;
   invoices: BillingInvoice[];
   payments: BillingPayment[];
+  reconEntries: ReconEntry[];
   seq: number;
 };
 
@@ -59,6 +73,7 @@ function seed(): BillingStore {
       createdAt,
     })),
     payments: [],
+    reconEntries: [],
     seq: 1,
   };
 }
@@ -112,6 +127,59 @@ export function recomputeInvoiceStatus(invoiceId: string) {
   if (!inv) return;
   const paid = store.payments.filter((p) => p.invoiceId === invoiceId).reduce((s, p) => s + p.amount, 0);
   inv.status = paid <= 0 ? "PENDING" : paid >= inv.amount - 0.01 ? "PAID" : "PARTIAL";
+}
+
+// ---- offline collection entries (voice / photo) ----
+
+export function addReconEntries(
+  rows: { name: string | null; amount: number; raw?: string }[],
+  source: ReconEntry["source"],
+  batchId: string | null
+): ReconEntry[] {
+  const store = getBilling();
+  const created = rows.map((r) => ({
+    id: nextBillingId("rec"),
+    payerName: r.name,
+    amount: r.amount,
+    source,
+    status: "PENDING" as const,
+    rawText: r.raw ?? null,
+    batchId,
+    createdAt: new Date().toISOString(),
+    decidedAt: null as string | null,
+  }));
+  store.reconEntries.push(...created);
+  return created;
+}
+
+export function listReconEntries(status?: string): ReconEntry[] {
+  const list = getBilling().reconEntries;
+  return [...list]
+    .filter((e) => (status ? e.status === status : true))
+    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+}
+
+export function updateReconEntry(
+  id: string,
+  patch: { status?: ReconEntry["status"]; payerName?: string | null; amount?: number }
+): ReconEntry | null {
+  const e = getBilling().reconEntries.find((x) => x.id === id);
+  if (!e) return null;
+  if (patch.status) {
+    e.status = patch.status;
+    e.decidedAt = patch.status === "PENDING" ? null : new Date().toISOString();
+  }
+  if (patch.payerName !== undefined) e.payerName = patch.payerName;
+  if (patch.amount !== undefined) e.amount = patch.amount;
+  return e;
+}
+
+export function removeReconEntry(id: string): boolean {
+  const store = getBilling();
+  const i = store.reconEntries.findIndex((x) => x.id === id);
+  if (i < 0) return false;
+  store.reconEntries.splice(i, 1);
+  return true;
 }
 
 // Manually link a payment to an invoice (owner override).
