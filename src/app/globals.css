@@ -1,19 +1,10 @@
-@import "tailwindcss";
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
 
 :root {
   --background: #eef3f8;
   --foreground: #0f1b3d;
-}
-
-@theme inline {
-  --color-background: var(--background);
-  --color-foreground: var(--foreground);
-  --color-paytm-cyan: #00baf2;
-  --color-paytm-cyan-dark: #009fd6;
-  --color-paytm-navy: #002970;
-  --color-paytm-navy-light: #20336b;
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
 }
 
 body {
@@ -22,7 +13,7 @@ body {
   font-family: -apple-system, "Segoe UI", Roboto, Arial, Helvetica, sans-serif;
 }
 
-/* Paytm-style primitives (plain CSS — works the same in Tailwind v4 builds). */
+/* Paytm-style primitives (plain CSS — builds the same everywhere). */
 .pt-card {
   background: #fff;
   border-radius: 14px;

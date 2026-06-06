@@ -94,6 +94,7 @@ const CONTENT_TYPES: Record<string, string> = {
 export async function extractText(bytes: Buffer, fileName: string, language = "en-IN"): Promise<string> {
   const ext = fileName.split(".").pop()?.toLowerCase() ?? "";
   const contentType = CONTENT_TYPES[ext] ?? "application/octet-stream";
+  console.log(`[sarvam-vision] ▶ START — file=${fileName} (${contentType}, ${bytes.length} bytes) language=${language}`);
 
   // 1. create job — plain Sarvam Vision model (no prompt_type), md output.
   const created = await (
@@ -106,6 +107,7 @@ export async function extractText(bytes: Buffer, fileName: string, language = "e
     })
   ).json();
   const jobId: string = created.job_id;
+  console.log("[sarvam-vision] 1/6 job created:", JSON.stringify(created));
 
   // 2. presigned upload URL
   const up = await (
@@ -117,6 +119,7 @@ export async function extractText(bytes: Buffer, fileName: string, language = "e
   ).json();
   const uploadUrl: string = up.upload_urls?.[fileName]?.file_url;
   if (!uploadUrl) throw new Error("Sarvam Vision: no upload URL returned");
+  console.log("[sarvam-vision] 2/6 upload URL obtained:", uploadUrl.split("?")[0]);
 
   // 3. PUT the file to Azure blob storage
   const put = await fetch(uploadUrl, {
@@ -125,15 +128,18 @@ export async function extractText(bytes: Buffer, fileName: string, language = "e
     body: bytes as unknown as BodyInit,
   });
   if (!put.ok) throw new Error(`Sarvam Vision: file upload failed (${put.status})`);
+  console.log(`[sarvam-vision] 3/6 file uploaded (HTTP ${put.status})`);
 
   // 4. start processing
   await sarvam(`/${jobId}/start`, { method: "POST" });
+  console.log("[sarvam-vision] 4/6 job started, polling status…");
 
   // 5. poll status (jobs typically finish in a few seconds)
   let state = "Pending";
   for (let i = 0; i < 40; i++) {
     const status = await (await sarvam(`/${jobId}/status`)).json();
     state = status.job_state;
+    console.log(`[sarvam-vision] 5/6 poll #${i + 1}: job_state=${state}`);
     if (TERMINAL.has(state)) {
       if (state === "Failed") {
         throw new Error(`Sarvam Vision job failed: ${status.error_message || "unknown error"}`);
@@ -158,6 +164,7 @@ export async function extractText(bytes: Buffer, fileName: string, language = "e
 
   const zipBytes = Buffer.from(await (await fetch(zipUrl)).arrayBuffer());
   const files = unzip(zipBytes);
+  console.log(`[sarvam-vision] 6/6 output downloaded — zip files: [${[...files.keys()].join(", ")}]`);
   // Prefer the markdown output; fall back to any .md, then concatenate.
   const md =
     files.get("document.md") ??
@@ -167,11 +174,13 @@ export async function extractText(bytes: Buffer, fileName: string, language = "e
   // When Sarvam can't confidently read a region it may embed the page as a
   // base64 markdown image and/or add an italic "image is blurry" note — strip
   // those so only real transcribed lines reach the parser.
-  return text
+  const cleaned = text
     .split(/\r?\n/)
     .filter((line) => !line.trimStart().startsWith("![") && !line.includes("data:image"))
     .join("\n")
     .trim();
+  console.log("[sarvam-vision] ✓ EXTRACTED TEXT:\n--------------------\n" + cleaned + "\n--------------------");
+  return cleaned;
 }
 
 // Default language hint for OCR. Indian Kirana notes are commonly Devanagari or

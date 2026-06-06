@@ -37,9 +37,11 @@ export async function POST(req: Request) {
   }
 
   const parsed = parseLedger(rawText);
+  console.log(`[recon/photo] parsed ${parsed.length} row(s) from Sarvam Vision text:`, JSON.stringify(parsed));
   if (parsed.length === 0) return Response.json({ rawText, entries: [] }, { status: 200 });
 
   const batchId = randomUUID();
   const entries = addReconEntries(parsed, "OCR", batchId);
+  console.log(`[recon/photo] created ${entries.length} PENDING entr(ies), batch ${batchId}`);
   return Response.json({ rawText, batchId, entries }, { status: 201 });
 }
