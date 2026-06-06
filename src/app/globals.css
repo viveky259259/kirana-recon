@@ -1,26 +1,66 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #eef3f8;
+  --foreground: #0f1b3d;
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
+  --color-paytm-cyan: #00baf2;
+  --color-paytm-cyan-dark: #009fd6;
+  --color-paytm-navy: #002970;
+  --color-paytm-navy-light: #20336b;
   --font-sans: var(--font-geist-sans);
   --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: -apple-system, "Segoe UI", Roboto, Arial, Helvetica, sans-serif;
+}
+
+/* Paytm-style primitives (plain CSS — works the same in Tailwind v4 builds). */
+.pt-card {
+  background: #fff;
+  border-radius: 14px;
+  border: 1px solid #e3ebf3;
+  box-shadow: 0 1px 2px rgba(15, 27, 61, 0.04);
+}
+.pt-btn {
+  background: #00baf2;
+  color: #fff;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: 0.6rem 1.1rem;
+  transition: background 0.15s ease;
+}
+.pt-btn:hover { background: #009fd6; }
+.pt-btn:disabled { opacity: 0.55; cursor: not-allowed; }
+.pt-btn-ghost {
+  background: #fff;
+  color: #002970;
+  border: 1px solid #cfe0ee;
+  font-weight: 600;
+  border-radius: 10px;
+  padding: 0.5rem 1rem;
+}
+.pt-btn-ghost:hover { background: #f3f8fc; }
+.pt-input {
+  width: 100%;
+  border: 1px solid #cfd9e6;
+  border-radius: 10px;
+  padding: 0.6rem 0.8rem;
+  background: #fff;
+  outline: none;
+}
+.pt-input:focus { border-color: #00baf2; box-shadow: 0 0 0 3px rgba(0, 186, 242, 0.15); }
+.pt-label {
+  font-size: 0.8rem;
+  font-weight: 600;
+  color: #4a5a78;
+  margin-bottom: 0.3rem;
+  display: block;
 }
