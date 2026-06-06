@@ -1,11 +1,12 @@
 import type { NextConfig } from "next";
-import path from "path";
+import { fileURLToPath } from "node:url";
+import { dirname } from "node:path";
 
 const nextConfig: NextConfig = {
-  // Pin the workspace root so Next doesn't get confused by a stray lockfile in
-  // the home directory.
+  // Pin the workspace root to this directory. Without this, Turbopack walks up
+  // to a parent lockfile and resolves files outside this worktree.
   turbopack: {
-    root: path.join(__dirname),
+    root: dirname(fileURLToPath(import.meta.url)),
   },
 };
 
