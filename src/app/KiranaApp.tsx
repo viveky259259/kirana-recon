@@ -2,6 +2,7 @@
 
 import { useCallback, useEffect, useState } from "react";
 import type { DashboardState, Payment, PaymentStatus } from "@/lib/types";
+import { AiCalls } from "@/components/AiCalls";
 
 const inr = (n: number) => `₹${n.toLocaleString("en-IN")}`;
 
@@ -167,6 +168,10 @@ export default function KiranaApp() {
         />
         <StoreDashboard state={state} onAfterAction={refresh} />
       </main>
+
+      <div className="mx-auto max-w-6xl px-5 pb-8">
+        <AiCalls />
+      </div>
     </div>
   );
 }
